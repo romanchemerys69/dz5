@@ -1,0 +1,50 @@
+#include <iostream>
+#include <string>
+#include <thread>
+#include <future>
+#include <chrono>
+#include <syncstream> // Потрібен C++20
+
+// Функція для потокобезпечного виводу
+void log_output(const std::string& text) {
+    std::osyncstream(std::cout) << text << std::endl;
+}
+
+// Універсальна функція виконання
+void execute_task(const std::string& name, int duration_sec) {
+    std::this_thread::sleep_for(std::chrono::seconds(duration_sec));
+    log_output(name);
+}
+
+void work() {
+    auto start = std::chrono::steady_clock::now();
+
+    // 1. Запускаємо "повільні" задачі A1 та A2 в окремих потоках.
+    auto f_A1 = std::async(std::launch::async, execute_task, "A1", 7);
+    auto f_A2 = std::async(std::launch::async, execute_task, "A2", 7);
+
+    // 2. чекаємо на A1/A2, виконуємо незалежний ланцюжок A3->A4->C у головному потоці.
+    execute_task("A3", 1);
+    execute_task("A4", 1);
+    execute_task("C", 1);
+
+    // 3. Точка синхронізації. Чекаємо завершення A1 та A2.
+    if (f_A1.valid()) f_A1.get();
+    if (f_A2.valid()) f_A2.get();
+
+    // 4. коли A1 і A2 готові, можна виконувати B.
+    execute_task("B", 1);
+
+    // 5. коли B готове, можна виконувати D.
+    execute_task("D", 1);
+
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+
+    std::osyncstream(std::cout) << "Work is done! Time: " << elapsed.count() << " seconds" << std::endl;
+}
+
+int main() {
+    work();
+    return 0;
+}
